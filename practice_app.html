@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>출입 관리 연습 콘솔</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: narrow single-column console, one panel per screen; TC map as a quiet reference strip at the bottom */
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --fg: #1b2430;
+  --muted: #5d6b7a;
+  --line: #d5dbe2;
+  --accent: #1f5fbf;
+  --accent-fg: #ffffff;
+  --danger: #b3261e;
+  --danger-bg: #fdecea;
+  --ok: #1e7a46;
+  --scrim: rgba(15, 22, 32, 0.45);
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171d; --panel: #1b222b; --fg: #e6ebf0; --muted: #98a5b3; --line: #2e3844;
+    --accent: #6ea3f0; --accent-fg: #0d1520; --danger: #f2a49c; --danger-bg: #3a1f1d; --ok: #7fd3a1;
+    --scrim: rgba(0, 0, 0, 0.6); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171d; --panel: #1b222b; --fg: #e6ebf0; --muted: #98a5b3; --line: #2e3844;
+  --accent: #6ea3f0; --accent-fg: #0d1520; --danger: #f2a49c; --danger-bg: #3a1f1d; --ok: #7fd3a1;
+  --scrim: rgba(0, 0, 0, 0.6); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px;
+}
+.wrap { max-width: 560px; margin: 0 auto; display: grid; gap: 20px; }
+header.top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.brand { font-weight: 700; font-size: 17px; }
+.brand small { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 500; margin-left: 6px; letter-spacing: .04em; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 20px; display: grid; gap: 14px; }
+h1 { font-size: 20px; margin: 0; text-wrap: balance; }
+h2 { font-size: 16px; margin: 0; }
+label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); font-weight: 600; }
+input {
+  font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 10px 12px; width: 100%;
+}
+input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button {
+  font: inherit; font-weight: 600; border-radius: 6px; padding: 10px 16px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg);
+}
+button.ghost { background: transparent; color: var(--fg); border-color: var(--line); }
+button.danger { background: transparent; color: var(--danger); border-color: var(--danger); padding: 6px 12px; font-size: 13px; }
+.msg { font-size: 14px; padding: 10px 12px; border-radius: 6px; background: var(--danger-bg); color: var(--danger); }
+.msg code, .tag { font-family: var(--font-mono); font-size: 12px; letter-spacing: .03em; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+.row > label { flex: 1 1 160px; min-width: 0; }
+.welcome { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .04em; }
+td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+td:last-child, th:last-child { text-align: right; }
+.empty { color: var(--muted); font-size: 14px; text-align: center; padding: 16px 0; }
+.scrim { position: fixed; inset: 0; background: var(--scrim); display: grid; place-items: center; padding: 16px; z-index: 20; }
+.dialog { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 20px; width: min(340px, 100%); display: grid; gap: 16px; }
+.dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
+.ref { font-size: 13px; color: var(--muted); display: grid; gap: 6px; }
+.ref ul { margin: 0; padding-left: 18px; }
+.ref .tag { color: var(--fg); }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+.hint code { font-family: var(--font-mono); color: var(--fg); }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">출입 관리 콘솔<small>PRACTICE</small></div>
+    <span class="hint">연습용 가상 앱</span>
+  </header>
+
+  <!-- 로그인 화면 -->
+  <section class="panel" id="login-screen" data-testid="login-screen">
+    <h1>관리자 로그인</h1>
+    <form id="login-form" class="row" style="display:grid;gap:12px" novalidate>
+      <label for="login-id">아이디
+        <input id="login-id" data-testid="login-id" autocomplete="username">
+      </label>
+      <label for="login-pw">비밀번호
+        <input id="login-pw" data-testid="login-pw" type="password" autocomplete="current-password">
+      </label>
+      <div class="msg" id="login-error" data-testid="login-error" hidden></div>
+      <button type="submit" id="login-btn" data-testid="login-btn">로그인</button>
+    </form>
+    <p class="hint">연습 계정: <code>admin</code> / <code>Test1234!</code></p>
+  </section>
+
+  <!-- 대시보드 -->
+  <section class="panel" id="dashboard" data-testid="dashboard" hidden>
+    <div class="welcome">
+      <h1 id="welcome" data-testid="welcome"></h1>
+      <button class="ghost" id="logout-btn" data-testid="logout-btn" type="button">로그아웃</button>
+    </div>
+
+    <h2>사용자 등록</h2>
+    <form id="user-form" class="row" novalidate>
+      <label for="user-name">이름
+        <input id="user-name" data-testid="user-name">
+      </label>
+      <label for="user-no">사번
+        <input id="user-no" data-testid="user-no" maxlength="20">
+      </label>
+      <button type="submit" id="save-btn" data-testid="save-btn">저장</button>
+    </form>
+    <div class="msg" id="user-error" data-testid="user-error" hidden></div>
+
+    <h2>사용자 목록</h2>
+    <div style="overflow-x:auto">
+      <table data-testid="user-table">
+        <thead><tr><th>이름</th><th>사번</th><th>관리</th></tr></thead>
+        <tbody id="user-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="ref" aria-label="TC 연결표">
+    <strong>이 화면과 연결된 TC</strong>
+    <ul>
+      <li><span class="tag">TC-01</span> 정상 로그인 → 환영 문구</li>
+      <li><span class="tag">TC-02</span> 잘못된 PW → <span class="tag">M-001</span></li>
+      <li><span class="tag">TC-03</span> 사용자 정상 등록</li>
+      <li><span class="tag">TC-04</span> 사번 중복 → <span class="tag">M-003</span></li>
+      <li><span class="tag">TC-05</span> 삭제 팝업 <span class="tag">M-004</span> → 삭제</li>
+    </ul>
+    <span>새로고침하면 데이터가 처음 상태로 돌아갑니다.</span>
+  </section>
+</div>
+
+<!-- 삭제 확인 팝업 -->
+<div class="scrim" id="confirm" data-testid="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-text" hidden>
+  <div class="dialog">
+    <div><span class="tag">M-004</span><div id="confirm-text" data-testid="confirm-text">삭제하시겠습니까?</div></div>
+    <div class="actions">
+      <button class="ghost" type="button" id="confirm-cancel" data-testid="confirm-cancel">취소</button>
+      <button type="button" id="confirm-ok" data-testid="confirm-ok">확인</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// 연습용 메시지 사양 (가상)
+const MSG = {
+  M001: "아이디 또는 비밀번호가 올바르지 않습니다",
+  M003: "이미 등록된 사번입니다",
+  M005: "이름과 사번을 모두 입력하세요"
+};
+const ACCOUNT = { id: "admin", pw: "Test1234!" };
+let users = [];          // 메모리에만 저장: 새로고침 시 초기화
+let pendingDelete = null;
+
+const $ = (id) => document.getElementById(id);
+
+function showError(el, code, text) {
+  el.innerHTML = '<code>' + code + '</code> ' + text;
+  el.hidden = false;
+}
+
+$("login-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const id = $("login-id").value.trim();
+  const pw = $("login-pw").value;
+  if (id === ACCOUNT.id && pw === ACCOUNT.pw) {
+    $("login-error").hidden = true;
+    $("login-screen").hidden = true;
+    $("dashboard").hidden = false;
+    $("welcome").textContent = id + "님 환영합니다";
+    render();
+  } else {
+    showError($("login-error"), "M-001", MSG.M001);
+  }
+});
+
+$("logout-btn").addEventListener("click", () => {
+  $("dashboard").hidden = true;
+  $("login-screen").hidden = false;
+  $("login-pw").value = "";
+});
+
+$("user-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const name = $("user-name").value.trim();
+  const no = $("user-no").value.trim();
+  const err = $("user-error");
+  if (!name || !no) { showError(err, "M-005", MSG.M005); return; }
+  if (users.some((u) => u.no === no)) { showError(err, "M-003", MSG.M003); return; }
+  err.hidden = true;
+  users.push({ name, no });
+  $("user-name").value = "";
+  $("user-no").value = "";
+  render();
+});
+
+function render() {
+  const tbody = $("user-rows");
+  tbody.innerHTML = "";
+  if (users.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = '<td colspan="3" class="empty" data-testid="empty-row">등록된 사용자가 없습니다</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+  users.forEach((u) => {
+    const tr = document.createElement("tr");
+    tr.setAttribute("data-testid", "user-row-" + u.no);
+    const n = document.createElement("td"); n.textContent = u.name;
+    const s = document.createElement("td"); s.className = "num"; s.textContent = u.no;
+    const a = document.createElement("td");
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "danger"; b.textContent = "삭제";
+    b.setAttribute("data-testid", "delete-" + u.no);
+    b.addEventListener("click", () => { pendingDelete = u.no; $("confirm").hidden = false; $("confirm-ok").focus(); });
+    a.appendChild(b);
+    tr.append(n, s, a);
+    tbody.appendChild(tr);
+  });
+}
+
+$("confirm-cancel").addEventListener("click", () => { pendingDelete = null; $("confirm").hidden = true; });
+$("confirm-ok").addEventListener("click", () => {
+  users = users.filter((u) => u.no !== pendingDelete);
+  pendingDelete = null;
+  $("confirm").hidden = true;
+  render();
+});
+</script>
+
+</html>
